@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>薬物動態学・TDM 選択式・自動判定アプリ</title>
+    <title>薬物動態学・TDM 15問ランダム演習アプリ</title>
     <style>
         :root {
             --bg-color: #f4f7f6;
@@ -39,13 +39,13 @@
         }
 
         header h1 {
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             color: var(--primary-color);
             margin-bottom: 5px;
         }
 
         header p {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             color: #666;
             margin-top: 0;
             margin-bottom: 15px;
@@ -73,7 +73,7 @@
             background: none;
             border: none;
             padding: 8px 12px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             font-weight: bold;
             color: #666;
             border-radius: 16px;
@@ -87,12 +87,24 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
-        /* プログレスバー */
+        /* 攻略率メーター（円グラフ風・バー風） */
+        .mastery-container {
+            background-color: #e0f2f1;
+            border: 1px solid #b2dfdb;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        /* 進捗バー */
         .progress-container {
             width: 100%;
             background-color: #e0e0e0;
             border-radius: 10px;
-            height: 10px;
+            height: 8px;
             margin-bottom: 15px;
             overflow: hidden;
         }
@@ -105,9 +117,9 @@
         }
 
         .progress-text {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             color: #555;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             display: flex;
             justify-content: space-between;
         }
@@ -142,7 +154,7 @@
         }
 
         .question-box {
-            font-size: 1rem;
+            font-size: 0.95rem;
             line-height: 1.6;
             font-weight: 600;
             margin-top: 15px;
@@ -163,7 +175,7 @@
             color: var(--text-color);
             border: 1px solid #ccc;
             padding: 12px 15px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             border-radius: 8px;
             cursor: pointer;
             text-align: left;
@@ -197,17 +209,17 @@
             border-left: 5px solid var(--primary-color);
             padding: 15px;
             border-radius: 4px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             text-align: left;
             line-height: 1.5;
             margin-top: 10px;
-            white-space: pre-wrap; /* 改行を有効にする */
+            white-space: pre-wrap;
         }
 
         .result-title {
             font-weight: bold;
             margin-bottom: 5px;
-            font-size: 1.1rem;
+            font-size: 1rem;
         }
         .result-title.correct { color: var(--correct-text); }
         .result-title.wrong { color: var(--wrong-text); }
@@ -261,8 +273,8 @@
 
 <div class="container">
     <header>
-        <h1>薬物動態学・TDM 自動判定</h1>
-        <p>国試過去問（2023〜2025年 問26〜45）完全収録</p>
+        <h1>薬物動態学・TDM 攻略演習</h1>
+        <p>国試過去問（2023〜2025年 問26〜45）</p>
     </header>
 
     <div id="loading" class="loading-screen">
@@ -271,8 +283,12 @@
 
     <div id="main-content" style="display: none;">
         <div class="mode-selector">
-            <button id="mode-all" class="mode-btn active" onclick="setMode('all')">全問学習モード</button>
+            <button id="mode-all" class="mode-btn active" onclick="setMode('all')">ランダム15問モード</button>
             <button id="mode-wrong" class="mode-btn" onclick="setMode('wrong')">苦手克服モード</button>
+        </div>
+
+        <div class="mastery-container" id="mastery-container">
+            全問攻略率 (印なし): 100% (0 / 60問)
         </div>
 
         <div class="progress-text">
@@ -308,21 +324,21 @@
             <div class="card" style="width: 100%;">
                 <h2 id="finish-title">🎉 モード終了！</h2>
                 <p id="finish-desc" style="line-height: 1.6;"></p>
-                <button class="btn" onclick="restartQuiz()">もう一度解く</button>
+                <button class="btn" onclick="restartQuiz()">新しい問題で再挑戦</button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // 状態管理用変数
-    let quizData = [];       // JSONから読み込むデータを格納
+    // 状態管理
+    let quizData = [];       // JSONからの全問題データ（60問）
     let currentMode = 'all'; 
-    let wrongList = [];     
-    let currentQuestions = []; 
+    let wrongList = [];      // 苦手マークがついている問題のID配列
+    let currentQuestions = []; // 今回解く問題セット（最大15問）
     let currentIndex = 0;
-    let userAnswers = {};   
-    let selectedOptionIndex = null;
+    let userAnswers = {};    // 今回の正誤ログ
+    const LIMIT_QUESTIONS = 15; // 1回の最大出題数
 
     // HTML要素
     const loadingEl = document.getElementById("loading");
@@ -337,6 +353,7 @@
     const progressBarEl = document.getElementById("progress-bar");
     const progressInfoEl = document.getElementById("progress-info");
     const scoreInfoEl = document.getElementById("score-info");
+    const masteryContainerEl = document.getElementById("mastery-container");
     
     const quizContainerEl = document.getElementById("quiz-container");
     const finishContainerEl = document.getElementById("finish-container");
@@ -346,56 +363,70 @@
         wrongList = JSON.parse(localStorage.getItem("wrongList"));
     }
 
-    // 1. 同一フォルダ内にある「quiz-data.json」を非同期で読み込む
+    // JSONデータの読み込み
     fetch('./quiz-data.json')
         .then(response => {
             if (!response.ok) {
-                throw new Error("JSONファイルの読み込みに失敗しました。パスや記述が正しいか確認してください。");
+                throw new Error("JSONファイルの読み込みに失敗しました。");
             }
             return response.json();
         })
         .then(data => {
             quizData = data;
-            // ロード成功後に画面表示を切り替え
             loadingEl.style.display = "none";
             mainContentEl.style.display = "block";
             
-            // 初期の問題セットを準備
-            currentQuestions = [...quizData];
-            loadQuestion(currentIndex);
+            // 初回の問題リスト作成（ランダム15問）
+            setMode('all');
         })
         .catch(error => {
             loadingEl.innerHTML = `<span style="color: var(--wrong-text);">${error.message}</span>`;
             console.error(error);
         });
 
-    // モード切替処理
+    // 配列をシャッフルする関数
+    function shuffleArray(array) {
+        const clone = [...array];
+        for (let i = clone.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [clone[i], clone[j]] = [clone[j], clone[i]];
+        }
+        return clone;
+    }
+
+    // モード切り替えおよび出題問題のセット
     function setMode(mode) {
         currentMode = mode;
         document.getElementById("mode-all").classList.remove("active");
         document.getElementById("mode-wrong").classList.remove("active");
         
+        userAnswers = {}; // 正誤ログのリセット
+
         if (mode === 'all') {
             document.getElementById("mode-all").classList.add("active");
-            currentQuestions = [...quizData];
+            // 全問をランダムシャッフルし、15問を抽出
+            const shuffledAll = shuffleArray(quizData);
+            currentQuestions = shuffledAll.slice(0, LIMIT_QUESTIONS);
         } else {
             document.getElementById("mode-wrong").classList.add("active");
-            currentQuestions = quizData.filter(q => wrongList.includes(q.id));
-        }
-
-        if (currentQuestions.length === 0) {
-            alert("現在、苦手マークがついている問題はありません！");
-            setMode('all');
-            return;
+            // 苦手リストにある問題をシャッフルしてセット（上限なし、または苦手すべて）
+            const wrongQuestions = quizData.filter(q => wrongList.includes(q.id));
+            if (wrongQuestions.length === 0) {
+                alert("現在、苦手マークがついている問題はありません！");
+                setMode('all');
+                return;
+            }
+            currentQuestions = shuffleArray(wrongQuestions);
         }
 
         currentIndex = 0;
         quizContainerEl.style.display = "block";
         finishContainerEl.style.display = "none";
         loadQuestion(currentIndex);
+        updateMasteryRate();
     }
 
-    // 問題の読み込み表示
+    // 問題のロード表示
     function loadQuestion(index) {
         if (currentQuestions.length === 0) return;
         
@@ -405,17 +436,16 @@
         nextBtnEl.style.opacity = "0.5";
 
         const activeQuestion = currentQuestions[index];
-        // 202X年 問XX の情報をわかりやすくヘッダーとして結合
         questionEl.innerHTML = `<strong style="color: var(--primary-color); display:block; margin-bottom:8px;">【${activeQuestion.year}年 ${activeQuestion.num}】</strong>${activeQuestion.q}`;
 
-        // 苦手マーク（印）の表示制御
+        // 苦手マークの表示
         if (wrongList.includes(activeQuestion.id)) {
             wrongBadgeEl.style.display = "block";
         } else {
             wrongBadgeEl.style.display = "none";
         }
 
-        // 選択肢の生成
+        // 選択肢のシャッフルは行わずそのまま表示
         optionsContainerEl.innerHTML = "";
         activeQuestion.options.forEach((optionText, idx) => {
             const button = document.createElement("button");
@@ -428,13 +458,13 @@
         updateProgress();
     }
 
-    // 回答が選択された時の正誤判定
+    // 回答選択・〇×判定
     function selectOption(selectedIndex) {
         const activeQuestion = currentQuestions[currentIndex];
         const correctIndex = activeQuestion.correct;
         const buttons = optionsContainerEl.getElementsByClassName("option-btn");
 
-        // 連打対策：すべての選択ボタンをロック
+        // 連打ロック
         for (let i = 0; i < buttons.length; i++) {
             buttons[i].disabled = true;
         }
@@ -442,28 +472,28 @@
         const isCorrect = (selectedIndex === correctIndex);
         userAnswers[activeQuestion.id] = isCorrect;
 
-        // カラーリングと自動苦手管理
         if (isCorrect) {
             buttons[selectedIndex].classList.add("correct-choice");
             resultStatusEl.innerText = "⭕ 正解！";
             resultStatusEl.className = "result-title correct";
             
-            // 正解したら苦手リストから削除
+            // 正解したら「苦手マーク（印）」をリストから削除
             wrongList = wrongList.filter(id => id !== activeQuestion.id);
         } else {
             buttons[selectedIndex].classList.add("wrong-choice");
-            buttons[correctIndex].classList.add("correct-choice"); // 正答の選択肢も緑色にする
+            buttons[correctIndex].classList.add("correct-choice"); // 正解のボタンも緑で強調
             resultStatusEl.innerText = "❌ 不正解...";
             resultStatusEl.className = "result-title wrong";
 
-            // 間違えたら苦手リストに保存（重複防止）
+            // 間違えたら「苦手マーク（印）」をリストに保存
             if (!wrongList.includes(activeQuestion.id)) {
                 wrongList.push(activeQuestion.id);
             }
         }
 
-        // 苦手リストをローカルストレージへ保存
+        // 苦手リストをストレージに保存＆全体の攻略状況を即座に更新
         localStorage.setItem("wrongList", JSON.stringify(wrongList));
+        updateMasteryRate();
 
         // 解説の表示
         explanationTextEl.innerText = activeQuestion.explanation;
@@ -492,7 +522,17 @@
         }
     }
 
-    // 進捗と正解率のリアルタイム計算・反映
+    // 攻略率（印のついていない問題の割合）を更新して表示する
+    function updateMasteryRate() {
+        if (quizData.length === 0) return;
+        const totalCount = quizData.length;
+        const wrongCount = wrongList.length;
+        const masteredCount = totalCount - wrongCount;
+        const rate = Math.round((masteredCount / totalCount) * 100);
+
+        masteryContainerEl.innerHTML = `全問攻略率 (苦手印なし): <span style="font-size:1.1rem; color:#004d40;">${rate}%</span> (${masteredCount} / ${totalCount}問)`;
+    }
+
     function updateProgress() {
         const total = currentQuestions.length;
         const current = currentIndex + 1;
@@ -511,7 +551,6 @@
         }
     }
 
-    // 全問回答後のスコア画面表示
     function showFinishScreen() {
         quizContainerEl.style.display = "none";
         finishContainerEl.style.display = "flex";
@@ -522,15 +561,14 @@
 
         document.getElementById("finish-title").innerText = "🎉 モード終了！";
         document.getElementById("finish-desc").innerHTML = `
-            お疲れ様でした！すべての問題を解き終えました。<br><br>
+            お疲れ様でした！今回の演習が終了しました。<br><br>
             <strong>今回の成績：</strong> ${total}問中 ${correctCount}問 正解<br>
-            <strong>現在の苦手蓄積：</strong> 残り ${wrongList.length} 問<br><br>
-            <span style="font-size:0.82rem; color:#666;">※間違えた問題は次回「苦手克服モード」で繰り返し解くことができます。</span>
+            <strong>現在の全体苦手蓄積：</strong> 残り ${wrongList.length} 問<br><br>
+            <span style="font-size:0.82rem; color:#666;">※間違えた問題は自動的に苦手リストに蓄積され、「苦手克服モード」で優先的に解き直せます。</span>
         `;
     }
 
     function restartQuiz() {
-        userAnswers = {};
         setMode(currentMode);
     }
 </script>
