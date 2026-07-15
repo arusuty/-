@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>薬物動態学・TDM 選択式・自動判定アプリ</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --primary-color: #00796b;
+            --accent-color: #e0f2f1;
+            --wrong-color: #ffcdd2;
+            --wrong-text: #c62828;
+            --correct-color: #c8e6c9;
+            --correct-text: #2e7d32;
+            --border-radius: 12px;
+            --shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 1.4rem;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+
+        header p {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        /* ローディング画面 */
+        .loading-screen {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            padding: 40px;
+        }
+
+        /* モード切替タブ */
+        .mode-selector {
+            display: flex;
+            background-color: #e0e0e0;
+            border-radius: 20px;
+            padding: 4px;
+            margin-bottom: 15px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            background: none;
+            border: none;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #666;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mode-btn.active {
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        /* プログレスバー */
+        .progress-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            height: 10px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 0.85rem;
+            color: #555;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 25px 20px;
+            margin-bottom: 20px;
+            min-height: 280px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        /* 苦手バッジ */
+        .wrong-badge {
+            display: none;
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background-color: var(--wrong-color);
+            color: var(--wrong-text);
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            border-radius: 10px;
+            border: 1px solid var(--wrong-text);
+        }
+
+        .question-box {
+            font-size: 1rem;
+            line-height: 1.6;
+            font-weight: 600;
+            margin-top: 15px;
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        /* 選択肢ボタン */
+        .options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .option-btn {
+            background-color: #ffffff;
+            color: var(--text-color);
+            border: 1px solid #ccc;
+            padding: 12px 15px;
+            font-size: 0.9rem;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+            line-height: 1.4;
+        }
+
+        .option-btn:hover:not(:disabled) {
+            background-color: #f1f1f1;
+            border-color: #888;
+        }
+
+        /* 判定カラー */
+        .option-btn.correct-choice {
+            background-color: var(--correct-color) !important;
+            color: var(--correct-text) !important;
+            border-color: var(--correct-text) !important;
+            font-weight: bold;
+        }
+
+        .option-btn.wrong-choice {
+            background-color: var(--wrong-color) !important;
+            color: var(--wrong-text) !important;
+            border-color: var(--wrong-text) !important;
+        }
+
+        /* 解説表示エリア */
+        .result-box {
+            display: none;
+            background-color: var(--accent-color);
+            border-left: 5px solid var(--primary-color);
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            text-align: left;
+            line-height: 1.5;
+            margin-top: 10px;
+            white-space: pre-wrap; /* 改行を有効にする */
+        }
+
+        .result-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 1.1rem;
+        }
+        .result-title.correct { color: var(--correct-text); }
+        .result-title.wrong { color: var(--wrong-text); }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 0.95rem;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn:hover { background-color: #004d40; }
+
+        .nav-buttons {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .btn-secondary {
+            background-color: #b0bec5;
+            color: white;
+            flex: 1;
+        }
+        .btn-secondary:hover { background-color: #90a4ae; }
+
+        .btn-next {
+            flex: 1.5;
+            background-color: #37474f;
+        }
+        .btn-next:hover { background-color: #263238; }
+
+        /* 完了画面 */
+        .finished {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>薬物動態学・TDM 自動判定</h1>
+        <p>国試過去問（2023〜2025年 問26〜45）完全収録</p>
+    </header>
+
+    <div id="loading" class="loading-screen">
+        データを読み込んでいます...
+    </div>
+
+    <div id="main-content" style="display: none;">
+        <div class="mode-selector">
+            <button id="mode-all" class="mode-btn active" onclick="setMode('all')">全問学習モード</button>
+            <button id="mode-wrong" class="mode-btn" onclick="setMode('wrong')">苦手克服モード</button>
+        </div>
+
+        <div class="progress-text">
+            <span id="progress-info">進捗状況: --</span>
+            <span id="score-info">正解率: --</span>
+        </div>
+        <div class="progress-container">
+            <div id="progress-bar" class="progress-bar"></div>
+        </div>
+
+        <div id="quiz-container">
+            <div class="card">
+                <div class="wrong-badge" id="wrong-badge">❌ 苦手マーク</div>
+                
+                <div class="question-box" id="question">問題が読み込まれます...</div>
+                
+                <div class="options-container" id="options-container">
+                    </div>
+
+                <div class="result-box" id="result-box">
+                    <div class="result-title" id="result-status">判定</div>
+                    <div id="explanation-text">解説が読み込まれます...</div>
+                </div>
+            </div>
+
+            <div class="nav-buttons">
+                <button class="btn btn-secondary" onclick="prevQuestion()">戻る</button>
+                <button class="btn btn-next" id="next-btn" onclick="nextQuestion()" disabled style="opacity: 0.5;">回答して次へ</button>
+            </div>
+        </div>
+
+        <div id="finish-container" class="finished">
+            <div class="card" style="width: 100%;">
+                <h2 id="finish-title">🎉 モード終了！</h2>
+                <p id="finish-desc" style="line-height: 1.6;"></p>
+                <button class="btn" onclick="restartQuiz()">もう一度解く</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 状態管理用変数
+    let quizData = [];       // JSONから読み込むデータを格納
+    let currentMode = 'all'; 
+    let wrongList = [];     
+    let currentQuestions = []; 
+    let currentIndex = 0;
+    let userAnswers = {};   
+    let selectedOptionIndex = null;
+
+    // HTML要素
+    const loadingEl = document.getElementById("loading");
+    const mainContentEl = document.getElementById("main-content");
+    const questionEl = document.getElementById("question");
+    const optionsContainerEl = document.getElementById("options-container");
+    const resultBoxEl = document.getElementById("result-box");
+    const resultStatusEl = document.getElementById("result-status");
+    const explanationTextEl = document.getElementById("explanation-text");
+    const nextBtnEl = document.getElementById("next-btn");
+    const wrongBadgeEl = document.getElementById("wrong-badge");
+    const progressBarEl = document.getElementById("progress-bar");
+    const progressInfoEl = document.getElementById("progress-info");
+    const scoreInfoEl = document.getElementById("score-info");
+    
+    const quizContainerEl = document.getElementById("quiz-container");
+    const finishContainerEl = document.getElementById("finish-container");
+
+    // ローカルストレージから苦手リストを復元
+    if (localStorage.getItem("wrongList")) {
+        wrongList = JSON.parse(localStorage.getItem("wrongList"));
+    }
+
+    // 1. 同一フォルダ内にある「quiz-data.json」を非同期で読み込む
+    fetch('./quiz-data.json')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("JSONファイルの読み込みに失敗しました。パスや記述が正しいか確認してください。");
+            }
+            return response.json();
+        })
+        .then(data => {
+            quizData = data;
+            // ロード成功後に画面表示を切り替え
+            loadingEl.style.display = "none";
+            mainContentEl.style.display = "block";
+            
+            // 初期の問題セットを準備
+            currentQuestions = [...quizData];
+            loadQuestion(currentIndex);
+        })
+        .catch(error => {
+            loadingEl.innerHTML = `<span style="color: var(--wrong-text);">${error.message}</span>`;
+            console.error(error);
+        });
+
+    // モード切替処理
+    function setMode(mode) {
+        currentMode = mode;
+        document.getElementById("mode-all").classList.remove("active");
+        document.getElementById("mode-wrong").classList.remove("active");
+        
+        if (mode === 'all') {
+            document.getElementById("mode-all").classList.add("active");
+            currentQuestions = [...quizData];
+        } else {
+            document.getElementById("mode-wrong").classList.add("active");
+            currentQuestions = quizData.filter(q => wrongList.includes(q.id));
+        }
+
+        if (currentQuestions.length === 0) {
+            alert("現在、苦手マークがついている問題はありません！");
+            setMode('all');
+            return;
+        }
+
+        currentIndex = 0;
+        quizContainerEl.style.display = "block";
+        finishContainerEl.style.display = "none";
+        loadQuestion(currentIndex);
+    }
+
+    // 問題の読み込み表示
+    function loadQuestion(index) {
+        if (currentQuestions.length === 0) return;
+        
+        selectedOptionIndex = null;
+        resultBoxEl.style.display = "none";
+        nextBtnEl.disabled = true;
+        nextBtnEl.style.opacity = "0.5";
+
+        const activeQuestion = currentQuestions[index];
+        // 202X年 問XX の情報をわかりやすくヘッダーとして結合
+        questionEl.innerHTML = `<strong style="color: var(--primary-color); display:block; margin-bottom:8px;">【${activeQuestion.year}年 ${activeQuestion.num}】</strong>${activeQuestion.q}`;
+
+        // 苦手マーク（印）の表示制御
+        if (wrongList.includes(activeQuestion.id)) {
+            wrongBadgeEl.style.display = "block";
+        } else {
+            wrongBadgeEl.style.display = "none";
+        }
+
+        // 選択肢の生成
+        optionsContainerEl.innerHTML = "";
+        activeQuestion.options.forEach((optionText, idx) => {
+            const button = document.createElement("button");
+            button.className = "option-btn";
+            button.innerText = optionText;
+            button.onclick = () => selectOption(idx);
+            optionsContainerEl.appendChild(button);
+        });
+
+        updateProgress();
+    }
+
+    // 回答が選択された時の正誤判定
+    function selectOption(selectedIndex) {
+        const activeQuestion = currentQuestions[currentIndex];
+        const correctIndex = activeQuestion.correct;
+        const buttons = optionsContainerEl.getElementsByClassName("option-btn");
+
+        // 連打対策：すべての選択ボタンをロック
+        for (let i = 0; i < buttons.length; i++) {
+            buttons[i].disabled = true;
+        }
+
+        const isCorrect = (selectedIndex === correctIndex);
+        userAnswers[activeQuestion.id] = isCorrect;
+
+        // カラーリングと自動苦手管理
+        if (isCorrect) {
+            buttons[selectedIndex].classList.add("correct-choice");
+            resultStatusEl.innerText = "⭕ 正解！";
+            resultStatusEl.className = "result-title correct";
+            
+            // 正解したら苦手リストから削除
+            wrongList = wrongList.filter(id => id !== activeQuestion.id);
+        } else {
+            buttons[selectedIndex].classList.add("wrong-choice");
+            buttons[correctIndex].classList.add("correct-choice"); // 正答の選択肢も緑色にする
+            resultStatusEl.innerText = "❌ 不正解...";
+            resultStatusEl.className = "result-title wrong";
+
+            // 間違えたら苦手リストに保存（重複防止）
+            if (!wrongList.includes(activeQuestion.id)) {
+                wrongList.push(activeQuestion.id);
+            }
+        }
+
+        // 苦手リストをローカルストレージへ保存
+        localStorage.setItem("wrongList", JSON.stringify(wrongList));
+
+        // 解説の表示
+        explanationTextEl.innerText = activeQuestion.explanation;
+        resultBoxEl.style.display = "block";
+
+        // 「次へ」ボタンを有効化
+        nextBtnEl.disabled = false;
+        nextBtnEl.style.opacity = "1";
+
+        updateProgress();
+    }
+
+    function nextQuestion() {
+        if (currentIndex < currentQuestions.length - 1) {
+            currentIndex++;
+            loadQuestion(currentIndex);
+        } else {
+            showFinishScreen();
+        }
+    }
+
+    function prevQuestion() {
+        if (currentIndex > 0) {
+            currentIndex--;
+            loadQuestion(currentIndex);
+        }
+    }
+
+    // 進捗と正解率のリアルタイム計算・反映
+    function updateProgress() {
+        const total = currentQuestions.length;
+        const current = currentIndex + 1;
+        const percent = (currentIndex / total) * 100;
+
+        progressBarEl.style.width = `${percent}%`;
+        progressInfoEl.innerText = `進捗状況: ${current} / ${total} 問目`;
+
+        const answeredIds = Object.keys(userAnswers);
+        if (answeredIds.length > 0) {
+            const correctCount = answeredIds.filter(id => userAnswers[id] === true).length;
+            const rate = Math.round((correctCount / answeredIds.length) * 100);
+            scoreInfoEl.innerText = `正解率: ${rate}%`;
+        } else {
+            scoreInfoEl.innerText = `正解率: --%`;
+        }
+    }
+
+    // 全問回答後のスコア画面表示
+    function showFinishScreen() {
+        quizContainerEl.style.display = "none";
+        finishContainerEl.style.display = "flex";
+        progressBarEl.style.width = "100%";
+
+        const total = currentQuestions.length;
+        const correctCount = currentQuestions.filter(q => userAnswers[q.id] === true).length;
+
+        document.getElementById("finish-title").innerText = "🎉 モード終了！";
+        document.getElementById("finish-desc").innerHTML = `
+            お疲れ様でした！すべての問題を解き終えました。<br><br>
+            <strong>今回の成績：</strong> ${total}問中 ${correctCount}問 正解<br>
+            <strong>現在の苦手蓄積：</strong> 残り ${wrongList.length} 問<br><br>
+            <span style="font-size:0.82rem; color:#666;">※間違えた問題は次回「苦手克服モード」で繰り返し解くことができます。</span>
+        `;
+    }
+
+    function restartQuiz() {
+        userAnswers = {};
+        setMode(currentMode);
+    }
+</script>
+
+</body>
+</html>
